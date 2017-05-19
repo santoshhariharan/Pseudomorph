@@ -5,8 +5,8 @@ function [ aRI ] = adjRandIndex( group,groupHat )
 n = numel(group);
 uGroup = unique(group);
 uGroupHat = unique(groupHat);
-nij = zeros(numel(uGroup),numel(uGroupHat));
-commbContMat = zeros(numel(uGroup),numel(uGroupHat));
+% nij = zeros(numel(uGroup),numel(uGroupHat));
+% commbContMat = zeros(numel(uGroup),numel(uGroupHat));
 
 gMat = false(numel(group),numel(uGroup));
 gHatMat = false(numel(group),numel(uGroupHat));

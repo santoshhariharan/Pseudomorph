@@ -401,3 +401,4 @@ plot(ppData(:,1),ppData(:,2),'o','MarkerFaceColor',[.4 0 0],...
 set(gca, 'visible', 'off') ;    
 %%
 clear w adjMat a xst scaleFact idx dis kVal;
+
