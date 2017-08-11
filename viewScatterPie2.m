@@ -19,7 +19,8 @@ uY = unique(y);
 % Compute distribution matrix
 disMat = zeros(numel(uYhat),numel(uY));
 for iTreatments = 1:numel(uYhat)
-    ii = strcmpi(uYhat{iTreatments,:},yhat);
+%     ii = strcmpi(uYhat{iTreatments,:},yhat);
+    ii = yhat == uYhat(iTreatments);
     for jClusters = 1:numel(uY)
         jj = y==uY(jClusters);
         disMat(iTreatments,jClusters) = sum(ii.*jj);
@@ -29,16 +30,17 @@ end
 rsize = sum(disMat,1);
 rsize = rsize./sum(rsize);
 
-% scalingFact = 60;
-% rsize = rsize*scalingFact;
+scalingFact = 60;
+rsize = rsize*scalingFact;
 % First plot clusters with lines from centroid of each cluster
-rangeX = max(x) - min(x);
-maxRSize = min(rangeX/(2*scalingFact));
-if(maxRSize<0)
-    maxRSize = 2;
-end
+% rangeX = abs(max(x) - min(x));
+% maxRSize = min(rangeX/(2*scalingFact));
+% if(maxRSize<0)
+%     maxRSize = 2;
+% end
+maxRSize = 2;
 rsize = (rsize - min(rsize))./(max(rsize) - min(rsize));
-rsize = (maxRSize-1)*rsize +1;
+% rsize = (maxRSize-1)*rsize +1;
 
     
 h=figure;hold all;

@@ -23,29 +23,34 @@ else
 end
 jj = w==0;
 w(jj) = inf;
-
-for iVertex = 1:m
-    disV = w(iVertex,:);
+fprintf('Computing path length...............')
+for iVertex = 1:m % For each vertex
+    fprintf('\b\b\b\b\b\b\b\b%7.3f%%',iVertex*100/m);
+    % Initialize
+%     disV = inf(1,m);
     prevV = zeros(m,1);
-    disV(iVertex) = 0;
+    
     Q = true(1,m);
-    Q(iVertex) = false;
+    Q(iVertex) = false;    
+    disV = w(iVertex,:);disV(iVertex) = 0;
+%     prevV = zeros(m,1);    
 %     allW = w(iVertex,:);
     while sum(Q)>0
         tmp = find(Q);
         [du,u] = min(disV(1,Q));
-        u = tmp(u);
-        Q(u) = false;
+        u = tmp(u); 
+        Q(u) = false; % Remove u from Q
+        tmpX = A(u,:);
         allU = w(u,:); % Find neighbors of u        
-        ii = find(allU ~= inf & Q); % Connected edge that is not visited
+        ii = find(logical(tmpX)); % Neighbour of u Connected edge that is not visited        
         if(isempty(ii))
 %             allU = w(:,u)';
 %             ii = find(allU ~= inf & Q);
 %             if(isempty(ii))
+                disp('breaking');
                 break;
 %             end
         end
-        %         allU = allU(ii);
         for j = 1:numel(ii)
             alt = du + allU(ii(j));
             if(alt<disV(ii(j)))

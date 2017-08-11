@@ -2,7 +2,7 @@ clear;clc;close all;
 warning('off','all');
 % numDimsVis = 2;
 fprintf('Starting pseudomorph\n');
-pth='F:\Projects\Proteinlocalization\PseudoMorph\Bin2Data\Mito-ERData';
+pth='F:\Projects\Proteinlocalization\PseudoMorph\Bin2Data';
 load(fullfile(pth,'parameters.mat'));% Load parameter file
 param.rootpath = pth;
 intensityFeature = 'Ch2_INT_Cell_intensity';
@@ -156,7 +156,7 @@ clear fNames filePrefix randPrc
 %% Pick samples from each control randomly
 gps = getGroupIndices(allTxt,unique(allTxt));
 samIndex = false(numel(gps),1);
-minSamplePerControl = 20000;
+minSamplePerControl = 800;
 % Pick minimum set of samples
 for i = 1:max(gps)
     minSamplePerControl = min(minSamplePerControl,sum(gps ==i ));
@@ -172,13 +172,14 @@ sampleData = allD(samIndex,:);
 %% Perform clustering high number of centroids -
 % Uneven number of samples
 % Feature Selection/Reduction
-k = 40;
+k = 5;
 graphType = 'Jaccard';
 numFeatures = [10:10:160];
 allCls = zeros(sum(samIndex),numel(numFeatures));
 for jFeatures = 1:numel(numFeatures)
     fprintf('#Features %d\n',numFeatures(jFeatures));
-    redFeatures = unsupervisedGreedyFS(sampleData,numFeatures(jFeatures));
+%     redFeatures = unsupervisedGreedyFS(sampleData,numFeatures(jFeatures));
+    redFeatures = unsupervisedPCASelect( sampleData,numFeatures(jFeatures) );
     nAllD = sampleData(:,redFeatures);
     allCls(:,jFeatures) = phenograph(nAllD,k,'graphtype',graphType);
 %     C = clsIn(nAllD);
@@ -202,6 +203,6 @@ for i = 1:m
     end
 end
 aRandIndex = aRandIndex+aRandIndex';
-aRandIndex = aRandIndex/2;
+% aRandIndex = aRandIndex/2;
 xx = diag(aRandIndex,-1);
 

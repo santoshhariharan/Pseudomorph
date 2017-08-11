@@ -1,31 +1,29 @@
-
-% Pseudomorph: Per control
-% Run pseudo morph on individual controls. 
-% Run pseudomorph on the collected centroids again to group them to get the
-% final set of centroids
-% Assign all points to individual centroids and keep the propoertions
-% algorithm steps
-% Read data - Load Individual control files (cleaned data)
-% Reduce the number of features to meaningful 30 -
-% Sample based on local density
-% Use k = 5 and create a sparse jaccard graph for phenograph
-% Save the centroids (Labels need not be stored)
-% Recluster the centroids using phenograph with an optimal value of k?
-% For all data, assign data to nearest centroids
-% Visualize with PCA (Based on sample)
-%********** All data points at once
+%% PSEUDOMORPH - CODE
+% Read data
+% Filter Data
+%     - For Intensity
+%     - For Morphology
+%     - For Focus
+%     - For expression
+% Cluster data (Repeat)
+%     - Per control K = 5
+%     - Create MST for each run by jaccard
+% Save multiple MST
+% 
+%%
+% 
 % Module - 1:
 % Define Variables 
 clear;clc;close all;
 warning('off','all');
 % numDimsVis = 2;
 fprintf('Starting pseudomorph\n');
-pth='F:\Projects\Proteinlocalization\PseudoMorph\Bin2Data\Mito-ERData';
+pth='F:\Projects\Proteinlocalization\PseudoMorph\Bin2Data';
 load(fullfile(pth,'parameters.mat'));% Load parameter file
 param.rootpath = pth;
 intensityFeature = 'Ch2_INT_Cell_intensity';
 intFeat = strcmpi(intensityFeature,param.datahdr);
-roiIntFeat = strcmpi('Ch2_MOR_cell_ROI_AvgIntensity',param.datahdr);
+% roiIntFeat = strcmpi('Ch2_MOR_cell_ROI_AvgIntensity',param.datahdr);
 nucAreaFeat = strcmpi('Ch1_MOR_Nucleus_area',param.datahdr);
 cellAreaFeat = strcmpi('Ch1_MOR_Cytoplasm_area',param.datahdr);
 filePrefix = '.txt';
@@ -37,7 +35,7 @@ columnForOrganelle = 10;
 % featureReduction = true;
 % clustersPerLandmark = true;
 
-maxMinTType = true;
+maxMinTType = false;
 % Module 3: Read & Load data after filtering
 fprintf('Module 3.......\n');
 mxRw = 1000000;
@@ -102,7 +100,7 @@ allTxtOrg= allTxtOrg(ii,:);
 fprintf('\nRemoved NAN %i\n',sum(~ii));
 
 % Remove incorrectly segmented & low intensity Objects
-ii = allMorRatio <= .5;
+ii = allMorRatio <= .7; % Value of this needs optimization
 allD = allD(ii,:);
 allTxt = allTxt(ii,:);
 allTxtOrg = allTxtOrg(ii,:);
@@ -161,7 +159,7 @@ newHeader = newHeader(1,ii);
 allD = allD(:,ii);
 % Feature Selection/Reduction
 % newHeader = param.datahdr(1,param.datafeat);
-featureReduction = true;
+featureReduction = false;
 numFeatures = 50;
 if(numel(newHeader)<=numFeatures)
     featureReduction = false;
@@ -183,14 +181,45 @@ end
 
 
 clear D focus cnt tok iFiles mxRw 
-clear allMorRatio allInten
+clear allMorRatio
 clear ii jj kk rho mxRw 
 clear intensityFeature intFeat roiIntFeat nucAreaFeat cellAreaFeat
 clear fNames filePrefix randPrc
-
-%% Pick samples from each control randomly
+%% RUN RF on TACB5D Low + HIGH and remove cells classified as low
 gps = getGroupIndices(allTxt,unique(allTxt));
-numRpt = 5;
+controlName = 'TACB5';
+controlIndex = strcmpi(uControls,controlName);
+if(sum(controlIndex)>0)
+    controlIndex = find(gps == find(strcmpi(uControls,controlName)));
+    medInten = median(allInten(controlIndex));
+    ii = allInten(controlIndex)< medInten;
+    gps(controlIndex(ii)) = max(gps)+1;
+    
+    % Create
+    minSamplePerControl = 20000;
+    for i = 1:max(gps)
+        minSamplePerControl = min(minSamplePerControl,sum(gps ==i ));
+    end    
+    dataPar = equalTrainingSamplePartition(gps,minSamplePerControl)';
+    mdl = classRF_train(allD(dataPar.training,:),gps(dataPar.training),100,...
+                floor(sqrt(size(allD,2))));
+    lbl = classRF_predict(allD,mdl);
+    ii = lbl == max(gps);
+    allD = allD(~ii,:);
+    allTxt = allTxt(~ii,:);
+%     gps = gps(~ii,:);
+    ii = strcmpi(allTxt,controlName);
+    allD = allD(~ii,:);
+    allTxt = allTxt(~ii,:);
+%     gps(ii) = 0;    
+end
+disp('Done');
+% Run classification
+%% Pick samples from each control randomly
+
+getEqualSamples  = false;
+gps = getGroupIndices(allTxt,unique(allTxt));
+numRpt = 1;
 samIndex = false(numel(gps),numRpt);
 minSamplePerControl = 20000;
 k = 5;
@@ -214,12 +243,21 @@ for iRpt = 1:numRpt
         samIndex(ii(randperm(numel(ii),minSamplePerControl)),iRpt) = true;
     end
     % Cluster Samples data for high number of clusters
-    data4Clustering = allD(samIndex(:,iRpt),:);
-    nGps = gps(samIndex(:,iRpt));    
+    
+    if(getEqualSamples)
+        nGps = gps(samIndex(:,iRpt));  
+        data4Clustering = allD(samIndex(:,iRpt),:);
+    else
+        nGps = gps;
+    end
     for iControl = 1:max(nGps)
         ii = nGps==iControl;
         fprintf('%s\n - %d\n',uControls{iControl,:},sum(ii));
-        grpData = data4Clustering(ii,:);
+        if(getEqualSamples)
+            grpData = data4Clustering(ii,:);
+        else
+            grpData = allD(ii,:);
+        end
         indx = phenograph(grpData,k,'graphtype',graphType);
         uIndx = unique(indx);
         for i = 1:numel(uIndx)
@@ -237,7 +275,13 @@ mCent = mCent(ii,:);
 mGrp  = mGrp(ii,:);
 mSet = mSet(ii,:);
 disp('Done');
-clear grpData indx uIndx ii data4Clustering nGps;  
+clear grpData indx uIndx ii data4Clustering nGps;
+return
+%% Compute path length using dijkstra's algorithm
+indx2 = phenograph(mCent,k,'graphtype',graphType);
+disp('Done');
+
+
 %% Upsample all data & assign it to clusters
 m = size(mCent,1);
 indx = knnclassify(data4Clustering, mCent, 1:m);
