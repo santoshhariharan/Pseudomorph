@@ -1,25 +1,27 @@
 clear;clc;close all;
 warning('off','all');
+% Define Input
+
 % numDimsVis = 2;
 fprintf('Starting pseudomorph\n');
+maxMinTType = true;
 pth='F:\Projects\Proteinlocalization\PseudoMorph\Bin2Data';
 load(fullfile(pth,'parameters.mat'));% Load parameter file
 param.rootpath = pth;
 intensityFeature = 'Ch2_INT_Cell_intensity';
+minIntensity = 100;
 intFeat = strcmpi(intensityFeature,param.datahdr);
-roiIntFeat = strcmpi('Ch2_MOR_cell_ROI_AvgIntensity',param.datahdr);
+% roiIntFeat = strcmpi('Ch2_MOR_cell_ROI_AvgIntensity',param.datahdr);
 nucAreaFeat = strcmpi('Ch1_MOR_Nucleus_area',param.datahdr);
 cellAreaFeat = strcmpi('Ch1_MOR_Cytoplasm_area',param.datahdr);
 filePrefix = '.txt';
-% randPrc = .1;
-% numFeatures = 30;
 fNames = dir(pth);
 columnForControls = 9;
 columnForOrganelle = 10;
 % featureReduction = true;
 % clustersPerLandmark = true;
 
-maxMinTType = true;
+
 % Module 3: Read & Load data after filtering
 fprintf('Module 3.......\n');
 mxRw = 1000000;
@@ -27,8 +29,8 @@ allD = zeros(mxRw,sum(param.datafeat));
 allInten = zeros(mxRw,1);
 allMorRatio = zeros(mxRw,1);
 allTxt = cell(mxRw,1);
-allTxtOrg = cell(mxRw,1);
-allMorIntensity = zeros(mxRw,1);
+% allTxtOrg = cell(mxRw,1);
+% allMorIntensity = zeros(mxRw,1);
 cnt = 1;
 fprintf('Completed Reading................');
 for iFiles = 3:size(fNames,1)
@@ -56,16 +58,12 @@ for iFiles = 3:size(fNames,1)
     D.data = D.data(ii,:);
     D.textdata = D.textdata(ii,:);
     allInten(cnt:cnt+size(D.data,1)-1,:) = D.data(:,intFeat); 
-    allMorIntensity(cnt:cnt+size(D.data,1)-1,:) = D.data(:,roiIntFeat);
-%     pp = D.data(:,nucAreaFeat)./(D.data(:,cellAreaFeat)+D.data(:,nucAreaFeat));
-%     if(sum(pp>10))
-%         fprintf('%s -- %f\n',fNames(iFiles).name,sum(pp>10)/numel(pp));
-%     end
+%     allMorIntensity(cnt:cnt+size(D.data,1)-1,:) = D.data(:,roiIntFeat);
     allMorRatio(cnt:cnt+size(D.data,1)-1,:) = D.data(:,nucAreaFeat)./...
                                             (D.data(:,cellAreaFeat)+D.data(:,nucAreaFeat));    
     allD(cnt:cnt+size(D.data,1)-1,:) = D.data(:,param.datafeat);
     allTxt(cnt:cnt+size(D.data,1)-1,:)= D.textdata(:,columnForControls);
-    allTxtOrg(cnt:cnt+size(D.data,1)-1,:)= D.textdata(:,columnForOrganelle);
+%     allTxtOrg(cnt:cnt+size(D.data,1)-1,:)= D.textdata(:,columnForOrganelle);
     cnt = cnt+size(D.data,1);
 end
 if(cnt<mxRw)
@@ -73,8 +71,8 @@ if(cnt<mxRw)
     allInten = allInten(1:cnt-1,:);
     allTxt = allTxt(1:cnt-1,:);
     allMorRatio = allMorRatio(1:cnt-1,:);
-    allMorIntensity = allMorIntensity(1:cnt-1,:);
-    allTxtOrg = allTxtOrg(1:cnt-1,:);
+%     allMorIntensity = allMorIntensity(1:cnt-1,:);
+%     allTxtOrg = allTxtOrg(1:cnt-1,:);
 end
 % Remove nan entries
 ii = sum(isnan(allD),2) ==0;
@@ -82,20 +80,28 @@ allD = allD(ii,:);
 allInten = allInten(ii,:);
 allTxt = allTxt(ii,:);
 allMorRatio = allMorRatio(ii,:);
-allMorIntensity = allMorIntensity(ii,:);
-allTxtOrg= allTxtOrg(ii,:);
+% allMorIntensity = allMorIntensity(ii,:);
+% allTxtOrg= allTxtOrg(ii,:);
 fprintf('\nRemoved NAN\n');
-% hist(allMorRatio,sqrt(size(allMorRatio,1)));
-% re
-% Remove incorrectly segmented & low intensity Objects
+
+% Remove Objects with no expression
+ii = allInten>minIntensity;
+allD = allD(ii,:);
+allInten = allInten(ii,:);
+allTxt = allTxt(ii,:);
+allMorRatio = allMorRatio(ii,:);
+
+% Remove incorrectly segmented Objects
 ii = allMorRatio <= .5;
 allD = allD(ii,:);
 allTxt = allTxt(ii,:);
-allTxtOrg = allTxtOrg(ii,:);
+% allTxtOrg = allTxtOrg(ii,: );
 allInten = allInten(ii,:);
 % allMorRatio = allMorRatio(ii,:);
 % allMorIntensity = allMorIntensity(ii,:);
-fprintf('#Cells Removed 4 intensity %i of %i\n',sum(~ii),numel(ii));
+clear allMorRatio;
+fprintf('#Cells Removed incorrect segmentation %i of %i\n',sum(~ii),numel(ii));
+
 
 % Normalization type
 if(maxMinTType)
@@ -117,7 +123,7 @@ ii = rho>-.5 & rho < .5;% Retain columns between -.5 & 0,5
 allD = allD(:,ii);
 newHeader = newHeader(1,ii);
 
-% Remove Lower 1% and upper 1% data for each control
+% Remove Lower 5% and upper 5% data for each control
 uControls = unique(allTxt);
 jj = false(size(allTxt,1),1);
 for i = 1:numel(uControls)
@@ -127,19 +133,23 @@ for i = 1:numel(uControls)
 end
 allD = allD(jj,:);
 allTxt = allTxt(jj,:);
-% allInten = allInten(jj,:);
+allInten = allInten(jj,:);
 % allMorRatio = allMorRatio(jj,:);
 % allMorIntensity = allMorIntensity(jj,:);
-allTxtOrg = allTxtOrg(jj,:);
+% allTxtOrg = allTxtOrg(jj,:);
 % param.meaninc = mean(allD);
 % param.varinc = var(allD);
 fprintf('#Cells removed by lower-upper quartile %i\n',sum(~jj));
+
+
 % Remove features having 75% same data
 [~,F] = mode(allD,1);
 F= F./size(allD,1);
 ii = F<.75;
 newHeader = newHeader(1,ii);
 allD = allD(:,ii);
+fprintf('Removed %i features due to invariance\n',sum(~ii));
+
 
 % Print number of cells per control
 for i = 1:numel(uControls)
@@ -156,39 +166,58 @@ clear fNames filePrefix randPrc
 %% Pick samples from each control randomly
 gps = getGroupIndices(allTxt,unique(allTxt));
 samIndex = false(numel(gps),1);
-minSamplePerControl = 800;
-% Pick minimum set of samples
-for i = 1:max(gps)
-    minSamplePerControl = min(minSamplePerControl,sum(gps ==i ));
-end
-minSamplePerControl = floor(.3*minSamplePerControl);
-for i = 1:max(gps)
-    ii = find(gps == i);    
-    samIndex(ii(randperm(numel(ii),minSamplePerControl))) = true;
-end
-fprintf('minimum samples per control %i\n',minSamplePerControl);
-
-sampleData = allD(samIndex,:);
-%% Perform clustering high number of centroids -
-% Uneven number of samples
-% Feature Selection/Reduction
-k = 5;
+minSamplePerControl = 500;
+kNeighbors = [5:5:50];
 graphType = 'Jaccard';
 numFeatures = [10:10:160];
-allCls = zeros(sum(samIndex),numel(numFeatures));
-for jFeatures = 1:numel(numFeatures)
-    fprintf('#Features %d\n',numFeatures(jFeatures));
-%     redFeatures = unsupervisedGreedyFS(sampleData,numFeatures(jFeatures));
-    redFeatures = unsupervisedPCASelect( sampleData,numFeatures(jFeatures) );
-    nAllD = sampleData(:,redFeatures);
-    allCls(:,jFeatures) = phenograph(nAllD,k,'graphtype',graphType);
-%     C = clsIn(nAllD);
-%     pref = C.pmed-((C.pmed-C.pmin)/(2^6));   
-%     allCls(:,jFeatures) = apcluster(C.S,pref);
+nRepeat= 10;
+ariValues = zeros(numel(kNeighbors),numel(numFeatures)-1,nRepeat);
+% Pick minimum set of samples
+for nRpt = 1:nRepeat
+    for i = 1:max(gps)
+        minSamplePerControl = min(minSamplePerControl,sum(gps ==i ));
+    end
+    minSamplePerControl = floor(.8*minSamplePerControl);
+    for i = 1:max(gps)
+        ii = find(gps == i);
+        samIndex(ii(randperm(numel(ii),minSamplePerControl))) = true;
+    end
+    fprintf('minimum samples per control %i\n',minSamplePerControl);
+    
+    sampleData = allD(samIndex,:);
+    % Perform clustering high number of centroids -
+    % Uneven number of samples
+    % Feature Selection/Reduction
+    % k = 5;
+    
+    allCls = zeros(sum(samIndex),numel(numFeatures),numel(kNeighbors));
+    for kk = 1:numel(kNeighbors)
+        for jFeatures = 1:numel(numFeatures)
+            fprintf('#Features %d\n',numFeatures(jFeatures));
+            %     redFeatures = unsupervisedGreedyFS(sampleData,numFeatures(jFeatures));
+            redFeatures = unsupervisedPCASelect( sampleData,numFeatures(jFeatures) );
+            nAllD = sampleData(:,redFeatures);
+            allCls(:,jFeatures,kk) = phenograph(nAllD,kNeighbors(kk),'graphtype',graphType);
+            %     C = clsIn(nAllD);
+            %     pref = C.pmed-((C.pmed-C.pmin)/(2^6));
+            %     allCls(:,jFeatures) = apcluster(C.S,pref);
+        end
+    end
+    
+    clear options grpData i j uInd indx cnt ii;
+    clear comm kk grpInten jFeatures redFeatures
+    % Compute ARI between feature & next
+    
+    
+    for i = 1:numel(kNeighbors)
+        for j = 1:numel(numFeatures)-1
+            ariValues(i,j,nRpt) = adjRandIndex(allCls(:,j,i),allCls(:,j+1,i));
+        end
+    end
 end
+ariValuesM = mean(ariValues(:,:,1:3),3);
+stdARI = std(ariValues(:,:,1:3),0,3);
 clc;disp('DONE');
-clear options grpData i j uInd indx cnt ii;
-clear comm kk grpInten jFeatures redFeatures
 %% Compute Adjusted Rand index
 % clc;
 % aRandIndex = nan(100,3);
@@ -199,7 +228,7 @@ m = numel(numFeatures);
 fprintf('Computing ARI.............\n');
 for i = 1:m
     for j = i+1:m
-        aRandIndex(i,j) = adjRandIndex(allCls(:,i),allCls(:,j));
+        aRandIndex(i,j) = adjRandIndex(allCls(:,i,1),allCls(:,j,1));
     end
 end
 aRandIndex = aRandIndex+aRandIndex';

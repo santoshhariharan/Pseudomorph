@@ -29,7 +29,7 @@ filePrefix = '.txt';
 fNames = dir(pth);
 columnForControls = 9;
 columnForOrganelle = 10;
-% featureReduction = true;
+featureReduction = true;
 % clustersPerLandmark = true;
 
 maxMinTType = false;
@@ -126,8 +126,8 @@ rho = corr(allD,allInten);
 newHeader = param.datahdr(1,param.datafeat);
 corrFeat = rho>-.5 & rho < .5;% Retain columns between -.5 & 0,5
 allD = allD(:,corrFeat);
-meanD = meanD(:,corrFeat);
-stdD = stdD(:,corrFeat);
+% meanD = meanD(:,corrFeat);
+% stdD = stdD(:,corrFeat);
 fprintf('#Features removed due to correlation %i\n',sum(~corrFeat));
 fprintf('%s\n',newHeader{1,~corrFeat});
 newHeader = newHeader(1,corrFeat);
@@ -156,8 +156,8 @@ newHeader = newHeader(1,ii);
 allD = allD(:,ii);
 % Feature Selection/Reduction
 % newHeader = param.datahdr(1,param.datafeat);
-featureReduction = false;
-numFeatures = 30;
+% featureReduction = false;
+numFeatures = 60;
 if(numel(newHeader)<=numFeatures)
     featureReduction = false;
 end
@@ -190,7 +190,7 @@ gps = getGroupIndices(allTxt,unique(allTxt));
 numRpt = 1;
 samIndex = false(numel(gps),numRpt);
 minSamplePerControl = 20000;
-k = 20;
+k = 30;
 graphType = 'jaccard';
 % Pick minimum set of samples
 for i = 1:max(gps)
@@ -231,7 +231,7 @@ ii = sum(isnan(mCent),2)==0;
 mCent = mCent(ii,:);
 % mGrp  = mGrp(ii,:);
 % mSet = mSet(ii,:);
-save('centroidAllData.mat','mCent','meanD','stdD','corrFeat');
+save('centroidPerControl_RedFeature_30K.mat','mCent','meanD','stdD','corrFeat');
 disp('Done');
 clear grpData indx uIndx ii data4Clustering nGps;
 return;

@@ -12,13 +12,29 @@
 %
 clear;clc;close all;
 warning('off','all');
-%%
+%% Read data from files
 % 
 % Module - 1:
 % Define Variables 
 
 fprintf('Starting pseudomorph\n');
+% Define Inputs:
 pth='F:\Projects\Proteinlocalization\PseudoMorph\Bin2Data';
+featureReduction = true;
+if(featureReduction)
+    featStatus = 'True';
+    numFeatures = 30;
+else
+    featStatus = 'False';
+    numFeatures = 160;
+end
+
+columnForControls = 9;
+columnForOrganelle = 10;
+fprintf('Path: %s\n',pth);
+fprintf('Feature reduction: %s\n',featStatus);
+fprintf('---Number Feature: %i\n',numFeatures);
+fprintf('Control column: %i\n',columnForControls);
 load(fullfile(pth,'parameters.mat'));% Load parameter file
 param.rootpath = pth;
 intensityFeature = 'Ch2_INT_Cell_intensity';
@@ -27,12 +43,8 @@ nucAreaFeat = strcmpi('Ch1_MOR_Nucleus_area',param.datahdr);
 cellAreaFeat = strcmpi('Ch1_MOR_Cytoplasm_area',param.datahdr);
 filePrefix = '.txt';
 fNames = dir(pth);
-columnForControls = 9;
-columnForOrganelle = 10;
-% featureReduction = true;
-% clustersPerLandmark = true;
 
-maxMinTType = false;
+
 % Module 3: Read & Load data after filtering
 fprintf('Module 3.......\n');
 mxRw = 1000000; 
@@ -84,9 +96,10 @@ if(cnt<mxRw)
 %     allMorIntensity = allMorIntensity(1:cnt-1,:);
     allTxtOrg = allTxtOrg(1:cnt-1,:);
 end
-
 fprintf('\n');
-% Remove nan entries
+% Remove Artifacts and noise
+
+% Remove NaN entries
 ii = sum(isnan(allD),2) ==0;
 allD = allD(ii,:);
 allInten = allInten(ii,:);
@@ -106,31 +119,14 @@ allInten = allInten(ii,:);
 % allMorIntensity = allMorIntensity(ii,:);
 fprintf('#Cells Removed 4 Morphology %i of %i\n',sum(~ii),numel(ii));
 
-% Normalization type
-if(maxMinTType)
-    minD = quantile(allD,.01);
-    maxD = quantile(allD,.99);
-    allD = bsxfun(@minus,allD, minD);
-    allD = bsxfun(@rdivide,allD,maxD - minD);
-    allInten = (allInten - min(allInten))./(max(allInten) - min(allInten));
-else
-    allInten = zscore(allInten);
-    meanD = mean(allD);
-    stdD = std(allD);
-    allD = zscore(allD);    
-end
 
-
-% Remove intensity correlated features
-rho = corr(allD,allInten);
-newHeader = param.datahdr(1,param.datafeat);
-corrFeat = rho>-.5 & rho < .5;% Retain columns between -.5 & 0,5
-allD = allD(:,corrFeat);
-meanD = meanD(:,corrFeat);
-stdD = stdD(:,corrFeat);
-fprintf('#Features removed due to correlation %i\n',sum(~corrFeat));
-fprintf('%s\n',newHeader{1,~corrFeat});
-newHeader = newHeader(1,corrFeat);
+% Remove cells with low intensity
+ii = allInten > 100;
+allD = allD(ii,:);
+allTxt = allTxt(ii,:);
+allTxtOrg = allTxtOrg(ii,:);
+allInten = allInten(ii,:);
+fprintf('#Cells Removed 4 Intensity %i of %\n',sum(~ii));
 
 % Remove Lower 1% and upper 1% data for each control
 uControls = unique(allTxt);
@@ -144,28 +140,49 @@ end
 allD = allD(jj,:);
 allTxt = allTxt(jj,:);
 allTxtOrg = allTxtOrg(jj,:);
+allInten = allInten(jj,:);
 % param.meaninc = mean(allD);
 % param.varinc = var(allD);
 fprintf('#Cells removed by lower-upper quartile %i\n',sum(~jj));
 
+
+% Remove intensity correlated features
+rho = corr(allD,allInten);
+newHeader = param.datahdr(1,param.datafeat);
+ii = find(param.datafeat);
+corrFeat = rho>-.5 & rho < .5;% Retain columns between -.5 & 0,5
+param.datafeat(1,ii(~corrFeat)) = false;
+allD = allD(:,corrFeat);
+fprintf('#Features removed due to correlation %i\n',sum(~corrFeat));
+fprintf('%s\n',newHeader{1,~corrFeat});
+newHeader = newHeader(1,corrFeat);
+
+
 % Remove features having 75% same data
 [~,F] = mode(allD,1);
 F= F./size(allD,1);
-ii = F<.75;
-newHeader = newHeader(1,ii);
-allD = allD(:,ii);
+jj = F<.75;
+ii = find(param.datafeat);
+param.datafeat(1,ii(~jj)) = false;
+
+newHeader = newHeader(1,jj);
+allD = allD(:,jj);
 % Feature Selection/Reduction
 % newHeader = param.datahdr(1,param.datafeat);
-featureReduction = true;
-numFeatures = 60;
+
+
 if(numel(newHeader)<=numFeatures)
     featureReduction = false;
+    fprintf('TURNED OFF FEATURE REDUCTION\n');
 end
 if(featureReduction)    
     redFeatures = unsupervisedGreedyFS(allD,numFeatures);
 else
     redFeatures = true(1,size(allD,2));
 end
+
+ii = find(param.datafeat);
+param.datafeat(1,ii(~redFeatures)) = false;
 fprintf('Features Chosen\n')
 fprintf('%s\n',newHeader{1,redFeatures});
 % [cf]= princomp(allD(:,redFeatures));
@@ -176,131 +193,49 @@ for i = 1:numel(uControls)
     fprintf('%s\t: %d\n',uControls{i,:},sum(ii));    
 end
 
+% Normalization
+meanD = mean(allD);
+stdD = std(allD);
+% allD = zscore(allD);  
+minD = min(allD);
+maxD = max(allD);
+allD = bsxfun(@minus,allD,minD);
+allD = bsxfun(@rdivide,allD,maxD-minD);
 
 clear D focus cnt tok iFiles mxRw 
-clear allMorRatio
+clear allMorRatio allInten
 clear ii jj kk rho mxRw 
-clear intensityFeature intFeat roiIntFeat nucAreaFeat cellAreaFeat
+clear intensityFeature roiIntFeat
 clear fNames filePrefix randPrc
 
-%% Load centroid data
-load('centroidPerControl_RedFeature_5K.mat');
-% Upsample data
-lvl1 = knnclassify(allD, mCent, 1:size(mCent,1));
-%% Discard Centroids with less than 5% of data points
-uL1 = unique(lvl1);
-m = numel(lvl1);
-fprintf('Cluster# \t Group \t #Percent\n');
-fprintf('--------------------\n');
-cnt = 0;
-clusterPercent = zeros(numel(uL1),1);
-for i = 1:numel(uL1)
-    fprintf('%2.0f \t %2.0f \t %6.3f\n ',i,mGrp(uL1(i)),...
-                        sum(lvl1==uL1(i))*100/m);
-    clusterPercent(i) = sum(lvl1==uL1(i))*100/m;                
-    cnt = cnt+sum(lvl1==uL1(i));
+
+
+%% Select Samples for Vieweing data
+vData = [];
+vGrp = [];
+mc = [];
+grp = getGroupIndices(allTxt,unique(allTxt));
+for i =1:max(grp)
+    ii = find(grp == i);
+    idx = knnsearch(allD(ii,:),mean(allD(ii,:)),'k',100);
+    idx = idx';
+    vData = [vData;allD(ii(idx),:)];
+    vGrp = [vGrp;grp(ii(idx,1))];
+    mc = [mc;mean(allD(ii,:))];
 end
-figure;hist(clusterPercent,sqrt(numel(clusterPercent)));
-xlabel('% of Total Data');
+pp= pdist2(mc,mc);
+%% tSNE
+redData = compute_mapping(vData,'Sammon',3);
+disp('$$$$')
 %%
-numDimsVis = 2;
-% pcaRedData = compute_mapping(mCent,'tSNE',numDimsVis);
-Y = mdscale(pdist2(mCent,mCent),numDimsVis);
-disp('@@@@@@@@@@@@');
-%% Do leave one out & compute MST
-
-allMST = zeros(size(mCent,1));
-for i = 1:max(mGrp)
-    mp = true(max(mGrp),1);
-    mp(i) = false;
-    ii = find(mGrp ~= i);
-%     tmpCent = pcaRedData(ii,:);
-    tmpCent = mCent(ii,:);
-%     [idx, dis] = knnsearch(tmpCent,tmpCent,'K',kVal+1);
-%     idx = idx(:,2:end);
-%     dis = dis(:,2:end);
-%     adjMat = zeros(size(tmpCent,1));
-%     distanceMatrix = inf(size(tmpCent,1));
-%     for j = 1:size(tmpCent,1)
-%         adjMat(j,idx(j,:)) = 1;
-%         distanceMatrix(j,idx(j,:)) = dis(j,:);
-%     end
-    adjMat = 1-eye(size(tmpCent,1));
-    distanceMatrix = pdist2(tmpCent,tmpCent);
-    [~,xst] = kruskal(adjMat, distanceMatrix);
-%     plotMSTFigure( pcaRedData(ii,:),xst,mGrp(ii,1),map(mp,:) );
-    for j = 1:size(xst,1)
-        allMST(ii(xst(j,1)),ii(xst(j,2))) = allMST(ii(xst(j,1)),ii(xst(j,2)))+1;
-    end
+figure;hold on;
+for i = 1:max(grp)
+    ii = vGrp == i;
+%     plot(redData(ii,1),redData(ii,2),'o','MarkerFacecolor',map(i,:),...
+%         'MarkerEdgeColor','None');
+    plot3(redData(ii,1),redData(ii,2),redData(ii,3),'o','MarkerFacecolor',map(i,:),...
+        'MarkerEdgeColor','None');
 end
-[r,c] = find(allMST>0);
-plotMSTFigure( pcaRedData,[r c],mGrp,map );
-disp('Done');
-% [idx, dis] = knnsearch(mCent,mCent,'K',kVal+1);
-
-
-
-
-
-%% View data
-numDimsVis = 2;
-pcaRedData = compute_mapping(mCent,'t-SNE',numDimsVis);
-disp('@@@@@@@@@@@@');
-%
-kVal = 5;
-[idx, dis] = knnsearch(mCent,mCent,'K',kVal+1);
-idx = idx(:,2:end);
-[m, n] = size(mCent);
-% Plot data
-figure; hold on;
-for iControl = 1:m
-    line([pcaRedData(iControl,1) pcaRedData(idx(iControl,:),1)'],...
-            [pcaRedData(iControl,2) pcaRedData(idx(iControl,:),2)'],...
-            'Color',[.8 .8 .8]);
-end
-
-for iControl = 1:max(mGrp)
-%     if(sum(rmGrp == iControl)>0)
-%         continue;
-%     end
-    
-    ii = mGrp == iControl;
-    plot(pcaRedData(ii,1),pcaRedData(ii,2),'o','MarkerFaceColor',map(iControl,:),...
-        'MarkerEdgeColor','None','MarkerSize',6);      
-end
-% legend(uControls);
-% set(gca,'XTick',[]);set(gca,'YTick',[]);
 hold off;
-%% Visualize using Pie chart
-
-%% 3D Plots
-% numDimsVis = 2;
-pcaRedData = compute_mapping(mCent,'t-SNE',3);
-disp('@@@@@@@@@@@@');
-%
-kVal = 1;
-[idx, dis] = knnsearch(mCent,mCent,'K',kVal+1);
-idx = idx(:,2:end);
-[m, n] = size(mCent);
-% Plot data
-figure; hold on;
-for iControl = 1:m
-    line([pcaRedData(iControl,1) pcaRedData(idx(iControl,:),1)'],...
-            [pcaRedData(iControl,2) pcaRedData(idx(iControl,:),2)'],...
-            [pcaRedData(iControl,3) pcaRedData(idx(iControl,:),3)'],...
-            'Color',[.8 .8 .8]);
-end
-
-for iControl = 1:max(mGrp)
-%     if(sum(rmGrp == iControl)>0)
-%         continue;
-%     end
-    
-    ii = mGrp == iControl;
-    plot3(pcaRedData(ii,1),pcaRedData(ii,2),pcaRedData(ii,3),'o','MarkerFaceColor',map(iControl,:),...
-        'MarkerEdgeColor','None','MarkerSize',6);      
-end
-% legend(uControls);
-% set(gca,'XTick',[]);set(gca,'YTick',[]);
-hold off;
+legend(unique(allTxt));
 

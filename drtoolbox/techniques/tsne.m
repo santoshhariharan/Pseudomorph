@@ -34,10 +34,10 @@ function ydata = tsne(X, labels, no_dims, initial_dims, perplexity)
         no_dims = 2;
     end
     if ~exist('initial_dims', 'var') || isempty(initial_dims)
-        initial_dims = min(50, size(X, 2));
+        initial_dims = min(40, size(X, 2));
     end
     if ~exist('perplexity', 'var') || isempty(perplexity)
-        perplexity = 30;
+        perplexity =10;
     end
     
     % First check whether we already have an initial solution

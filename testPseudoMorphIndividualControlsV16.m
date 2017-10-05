@@ -18,7 +18,23 @@ warning('off','all');
 % Define Variables 
 
 fprintf('Starting pseudomorph\n');
+% Define Inputs:
 pth='F:\Projects\Proteinlocalization\PseudoMorph\Bin2Data';
+featureReduction = true;
+if(featureReduction)
+    featStatus = 'True';
+    numFeatures = 30;
+else
+    featStatus = 'False';
+    numFeatures = 160;
+end
+% numFeatures = 60;
+columnForControls = 9;
+columnForOrganelle = 10;
+fprintf('Path: %s\n',pth);
+fprintf('Feature reduction: %s\n',featStatus);
+fprintf('---Number Feature: %i\n',numFeatures);
+fprintf('Control column: %i\n',columnForControls);
 load(fullfile(pth,'parameters.mat'));% Load parameter file
 param.rootpath = pth;
 intensityFeature = 'Ch2_INT_Cell_intensity';
@@ -27,8 +43,7 @@ nucAreaFeat = strcmpi('Ch1_MOR_Nucleus_area',param.datahdr);
 cellAreaFeat = strcmpi('Ch1_MOR_Cytoplasm_area',param.datahdr);
 filePrefix = '.txt';
 fNames = dir(pth);
-columnForControls = 9;
-columnForOrganelle = 10;
+
 
 % Module 3: Read & Load data after filtering
 fprintf('Module 3.......\n');
@@ -154,10 +169,11 @@ newHeader = newHeader(1,jj);
 allD = allD(:,jj);
 % Feature Selection/Reduction
 % newHeader = param.datahdr(1,param.datafeat);
-featureReduction = false;
-numFeatures = 30;
+
+
 if(numel(newHeader)<=numFeatures)
     featureReduction = false;
+    fprintf('TURNED OFF FEATURE REDUCTION\n');
 end
 if(featureReduction)    
     redFeatures = unsupervisedGreedyFS(allD,numFeatures);
@@ -184,10 +200,42 @@ allD = zscore(allD);
 
 
 clear D focus cnt tok iFiles mxRw 
-clear allMorRatio allInten
+clear allMorRatio 
 clear ii jj kk rho mxRw 
 clear intensityFeature roiIntFeat
 clear fNames filePrefix randPrc
+% clear allInten
+
+% Create an RF classifier to remove cells classidi
+%% RUN RF on TACB5D Low + HIGH and remove cells classified as low
+gps = getGroupIndices(allTxt,unique(allTxt));
+controlName = 'TACB5';
+controlIndex = strcmpi(uControls,controlName);
+if(sum(controlIndex)>0)
+    controlIndex = find(gps == find(strcmpi(uControls,controlName)));
+    medInten = median(allInten(controlIndex));
+    ii = allInten(controlIndex)< medInten;
+    gps(controlIndex(ii)) = max(gps)+1;
+    
+    % Create
+    minSamplePerControl = 20000;
+    for i = 1:max(gps)
+        minSamplePerControl = min(minSamplePerControl,sum(gps ==i ));
+    end    
+    dataPar = equalTrainingSamplePartition(gps,minSamplePerControl)';
+    mdl = classRF_train(allD(dataPar.training,:),gps(dataPar.training),100,...
+                floor(sqrt(size(allD,2))));
+    lbl = classRF_predict(allD,mdl);
+    ii = lbl == max(gps);
+    allD = allD(~ii,:);
+    allTxt = allTxt(~ii,:);
+%     gps = gps(~ii,:);
+    ii = strcmpi(allTxt,controlName);
+    allD = allD(~ii,:);
+    allTxt = allTxt(~ii,:);
+%     gps(ii) = 0;    
+end
+disp('Done');
 
 %% Pick samples from each control randomly
 
@@ -196,7 +244,7 @@ gps = getGroupIndices(allTxt,unique(allTxt));
 numRpt = 1;
 samIndex = false(numel(gps),numRpt);
 minSamplePerControl = 20000;
-k = 30;
+k = 5;
 graphType = 'jaccard';
 % Pick minimum set of samples
 for i = 1:max(gps)
@@ -207,6 +255,7 @@ fprintf('minimum samples per control %i\n',minSamplePerControl);
 mCent = nan(1000,size(allD,2));
 mGrp = nan(1000,1);
 mSet = nan(1000,1);
+mFraction = nan(1000,1);
 cnt = 1;
 for iRpt = 1:numRpt
     fprintf('**********************************************\n');
@@ -238,19 +287,23 @@ for iRpt = 1:numRpt
             mCent(cnt,:) = mean(grpData(indx==uIndx(i),:));
             mGrp(cnt,1) = iControl;
             mSet(cnt,1) = iRpt;
+            mFraction(cnt,1) = sum(indx==uIndx(i))/numel(indx);
             cnt = cnt+1;
         end
     end
 %           
 end
 ii = sum(isnan(mCent),2)==0;
-%  
 mCent = mCent(ii,:);
 mGrp  = mGrp(ii,:);
 mSet = mSet(ii,:);
-save('centroid.mat','mCent','mGrp','mSet','meanD','stdD','corrFeat');
+mFraction = mFraction(ii,:);
+controlNames = unique(allTxt);
+save('centroidPerControl_RedFeat_5K_30F.mat','mCent','mGrp','mSet',...
+                    'meanD','stdD','corrFeat','mFraction','controlNames');
 disp('Done');
 clear grpData indx uIndx ii data4Clustering nGps;
+return;
 %% Create RF classifier
 
 minSamples = 5000;

@@ -1,4 +1,4 @@
-function G = knn2jaccard( IDX )
+function [G,I,J,S] = knn2jaccard( IDX )
 % IN:
 %   IDX is a n x k matrix
 %   row i contains the indices of i's k nearest neighbors (in descending order of similarity)
@@ -36,7 +36,7 @@ end
 % Produce sparse lower triangle of symmetrized graph
 G = sparse(I,J,S,n,n);
 init_edge_num = nnz(G);
-clear I J S IDX
+% clear I J S IDX
 u = triu(G,1);
 v = tril(G,-1);
 % G = v .* u'; % product zeros-out non-reciprocal edges
