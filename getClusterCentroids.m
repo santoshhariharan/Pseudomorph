@@ -1,4 +1,4 @@
-function [ xCent,uIdx ] = getClusterCentroids( x,idx,statType )
+function [ xCent,f ] = getClusterCentroids( x,idx,statType )
 %getClusterCentroids Computes cluster centers based on data & index
 % Inputs:
 % x - m x n matrix with m observations and n variables
@@ -15,6 +15,7 @@ end
 [~ , n] = size(x);
 uIdx = unique(idx);
 xCent = zeros(numel(uIdx),n);
+f = zeros(numel(uIdx),1);
 for iCls = 1:numel(uIdx)
     ii = idx == uIdx(iCls);
     if(strcmpi(statType,'median'))
@@ -22,6 +23,7 @@ for iCls = 1:numel(uIdx)
     else
         xCent(iCls,:) = mean(x(ii,:));        
     end
+    f(iCls) = sum(ii);
 end
 
 

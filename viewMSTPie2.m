@@ -1,36 +1,52 @@
-function [ h ] = viewMSTPie2(x,disMat,map,names,xst,scalingFact)
+function [ h ] = viewMSTPie2(x,clusterIndex,treatmentIndex,...
+                                    map,adjacencyMatrix,edgeWidth,...
+                                    treatmentNames)
 %viewMSTPie2 Plots data in x using grouping in y with colours of yhat
 % Plots cluster centroids based on x. 
 % Input:
-% x - cluster centroids #clusters x 2
-% map - map for treatment distribution of clusters
-% disMat - #Treatments x#clusters
-% names - Names of treatment
+% x - Reduced dimensional plot
+% clusterIndex - Cluster Indices
+% treatmentIndex - Treatment Indices
+% map - Color map for treatments
+% adjacencyMatrix - Matrix of MST connection
+% edgeWidth - Width of the edges
 % xst - Minimum Spanning tree
-
 
 if(size(x,2)>2)
     error('@viewScatterPie: Only two dmensional plot allowed');    
 end
 
-if(size(map,1)<size(disMat,2))
-    error('@viewScatterPie: Map does not include all treatments');
+% Compute distribution matrix
+uniqueClusterIndex = unique(clusterIndex);
+uniqueTreatmentIndex = unique(treatmentIndex);
+uniqueClusterIndex = uniqueClusterIndex(uniqueClusterIndex~=0);
+disMat = zeros(numel(uniqueClusterIndex),numel(uniqueTreatmentIndex));
+for iCls = 1:numel(uniqueClusterIndex)
+    ii = clusterIndex == uniqueClusterIndex(iCls);
+    for jTreatment = 1:numel(uniqueTreatmentIndex)
+        jj = treatmentIndex == uniqueTreatmentIndex(jTreatment);
+        disMat(iCls,jTreatment) = sum(ii.*jj);
+    end
 end
 
-rMaxWidth = abs(min(min(x))-min(max(x)));
-
+% Estimate radius for each cluster
+axisRange = abs(max(x)-min(x));
+maxRadius = .03*min(axisRange);
+minRadius = .03*min(axisRange);
 rsize = sum(disMat,2);
-rsize = rsize./sum(rsize);
-% scalingFact = 50;
-% scalingFact = rMaxWidth./scalingFact;
-rsize = rsize*scalingFact;
+rsize = (rsize - min(rsize))./(max(rsize)- min(rsize));
+rsize = (maxRadius - minRadius)*rsize + minRadius;
 
-% Resize scaling between 4 & 20
-% maxR = 10;
-% minR = 4;
-% rsize = ((maxR-minR)*((rsize - min(rsize))/(max(rsize)-min(rsize)))+minR);
-% First plot clusters with lines from centroid of each cluster
-% rsize = floor(rsize);
+% Get Edges
+adjacencyMatrix = tril(adjacencyMatrix);
+[r,c] = find(adjacencyMatrix);
+lv = find(adjacencyMatrix);
+[v] = edgeWidth(lv);
+edgeWidthVal = (v - min(v))./(max(v)-min(v));
+v = edgeWidthVal;
+edgeWidthVal = 1*edgeWidthVal+.1;
+xst = [r c];
+
 
 
 % In the same figure plot data using patches - Uses inbuilt Matlab function
@@ -43,10 +59,27 @@ numSteps = 30;
 % rsize = 5;
 % hold on;
 h=figure;hold all;
+
+% Plot points
+points2Plot = unique([r;c]);
+
+for i = 1:size(xst,1)
+    coord = x(xst(i,:),:)';    
+    line(coord(1,:),coord(2,:),'Linewidth',edgeWidthVal(i),'Color',1-(v(i)*[.7 .7 .7]));    
+end
+% for i = 1:points2Plot
+%     cl = map(treatmentIndex(points2Plot(i)),:);
+    scatter(x(points2Plot,1),x(points2Plot,2),45,...
+        map(treatmentIndex(points2Plot),:),'filled'); 
+% end
+
+
+
+
 for iClusters = 1:size(disMat,1)
     startAngle = 0;  
     treatProportion = disMat(iClusters,:)./sum(disMat(iClusters,:));
-    cCenter = x(iClusters,:);
+    cCenter = x(uniqueClusterIndex(iClusters),:);
     hall=[];
     for jTreatment =  1:numTreatments
         step = treatProportion(jTreatment)*2*pi/numSteps;
@@ -61,16 +94,9 @@ for iClusters = 1:size(disMat,1)
     end    
 %     legend(uYhat)
 end
-
-
-for i = 1:size(xst,1)
-    coord = x(xst(i,:),:)';    
-    line(coord(1,:),coord(2,:),'Linewidth',.2,'Color',[.4 .4 .4]);    
-end
-
 hold off;axis tight
-% legend(hall,names);
+legend(hall,treatmentNames);
 % clear hall
-
+axis off;
 end
 

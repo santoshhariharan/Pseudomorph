@@ -1,17 +1,3 @@
-%% PSEUDOMORPH - CODE
-% Read data
-% Filter Data
-%     - For Intensity
-%     - For Morphology
-%     - For Focus
-%     - For expression
-% Cluster data (Repeat)
-%     - Per control K = 5
-%     - Create MST for each run by jaccard
-% Save multiple MST
-%
-clear;clc;close all;
-warning('off','all');
 %% Read data from files
 % 
 % Module - 1:
@@ -20,7 +6,7 @@ warning('off','all');
 fprintf('Starting pseudomorph\n');
 % Define Inputs:
 pth='F:\Projects\Proteinlocalization\PseudoMorph\Bin2Data';
-featureReduction = false;
+featureReduction = true;
 if(featureReduction)
     featStatus = 'True';
     numFeatures = 30;
@@ -167,7 +153,7 @@ param.datafeat(1,ii(~jj)) = false;
 
 newHeader = newHeader(1,jj);
 allD = allD(:,jj);
-% Feature Selection/Reduction
+%% Feature Selection/Reduction
 % newHeader = param.datahdr(1,param.datafeat);
 
 
@@ -181,129 +167,3 @@ if(featureReduction)
 else
     redFeatures = true(1,size(allD,2));
 end
-
-ii = find(param.datafeat);
-param.datafeat(1,ii(~redFeatures)) = false;
-fprintf('# Number of features %i\n',sum(redFeatures));
-fprintf('Features Chosen\n')
-fprintf('%s\n',newHeader{1,redFeatures});
-% [cf]= princomp(allD(:,redFeatures));
-allD = allD(:,redFeatures);
-% Print number of cells per control
-for i = 1:numel(uControls)
-    ii = (strcmpi(uControls{i,:},allTxt));
-    fprintf('%s\t: %d\n',uControls{i,:},sum(ii));    
-end
-
-% Normalization
-meanD = mean(allD);
-stdD = std(allD);
-allD = zscore(allD);  
-
-
-clear D focus cnt tok iFiles mxRw 
-clear allMorRatio 
-clear ii jj kk rho mxRw 
-clear intensityFeature roiIntFeat
-clear fNames filePrefix randPrc
-% clear allInten
-
-% Create an RF classifier to remove cells classidi
-%% RUN RF on TACB5D Low + HIGH and remove cells classified as low
-% gps = getGroupIndices(allTxt,unique(allTxt));
-% controlName = 'TACB5';
-% controlIndex = strcmpi(uControls,controlName);
-% if(sum(controlIndex)>0)
-%     controlIndex = find(gps == find(strcmpi(uControls,controlName)));
-%     medInten = median(allInten(controlIndex));
-%     ii = allInten(controlIndex)< medInten;
-%     gps(controlIndex(ii)) = max(gps)+1;
-%     
-%     % Create
-%     minSamplePerControl = 20000;
-%     for i = 1:max(gps)
-%         minSamplePerControl = min(minSamplePerControl,sum(gps ==i ));
-%     end    
-%     dataPar = equalTrainingSamplePartition(gps,minSamplePerControl)';
-%     mdl = classRF_train(allD(dataPar.training,:),gps(dataPar.training),100,...
-%                 floor(sqrt(size(allD,2))));
-%     lbl = classRF_predict(allD,mdl);
-%     ii = lbl == max(gps);
-%     allD = allD(~ii,:);
-%     allTxt = allTxt(~ii,:);
-% %     gps = gps(~ii,:);
-%     ii = strcmpi(allTxt,controlName);
-%     allD = allD(~ii,:);
-%     allTxt = allTxt(~ii,:);
-% %     gps(ii) = 0;    
-% end
-% disp('Done');
-%% Cluster data using Phenograph
-getEqualSamples  = false;
-gps = getGroupIndices(allTxt,unique(allTxt));
-numRpt = 1;
-samIndex = false(numel(gps),numRpt);
-minSamplePerControl = 20000;
-k = 5;
-graphType = 'jaccard';
-% Pick minimum set of samples
-for i = 1:max(gps)
-    minSamplePerControl = min(minSamplePerControl,sum(gps ==i ));
-end
-minSamplePerControl = floor(.7*minSamplePerControl);
-fprintf('minimum samples per control %i\n',minSamplePerControl);
-mCent = nan(1000,size(allD,2));
-mGrp = nan(1000,1);
-mSet = nan(1000,1);
-mFraction = nan(1000,1);
-cnt = 1;
-for iRpt = 1:numRpt
-    fprintf('**********************************************\n');
-    fprintf('*****REPEAT %i\n',iRpt);
-    fprintf('**********************************************\n');
-    for i = 1:max(gps)
-        ii = find(gps == i);
-        samIndex(ii(randperm(numel(ii),minSamplePerControl)),iRpt) = true;
-    end
-    % Cluster Samples data for high number of clusters
-    
-    if(getEqualSamples)
-        nGps = gps(samIndex(:,iRpt));  
-        data4Clustering = allD(samIndex(:,iRpt),:);
-    else
-        nGps = gps;
-    end
-    for iControl = 1:max(nGps)
-        ii = nGps==iControl;
-        fprintf('%s\n - %d\n',uControls{iControl,:},sum(ii));
-        if(getEqualSamples)
-            grpData = data4Clustering(ii,:);
-        else
-            grpData = allD(ii,:);
-        end
-        indx = phenograph(grpData,k,'graphtype',graphType);
-        uIndx = unique(indx);
-        for i = 1:numel(uIndx)
-            mCent(cnt,:) = mean(grpData(indx==uIndx(i),:));
-            mGrp(cnt,1) = iControl;
-            mSet(cnt,1) = iRpt;
-            mFraction(cnt,1) = sum(indx==uIndx(i))/numel(indx);
-            cnt = cnt+1;
-        end
-    end
-%           
-end
-ii = sum(isnan(mCent),2)==0;
-mCent = mCent(ii,:);
-mGrp  = mGrp(ii,:);
-mSet = mSet(ii,:);
-mFraction = mFraction(ii,:);
-controlNames = unique(allTxt);
-dataFeat = param.datafeat;
-
-save(['centroidPerControl_Feat' num2str(size(mCent,2)) 'F_' num2str(k) 'K.mat'],'mCent','mGrp','mSet',...
-                    'meanD','stdD','corrFeat','mFraction','controlNames',...
-                    'dataFeat','redFeatures');
-disp('Done');
-clear grpData indx uIndx ii data4Clustering nGps;
-return;

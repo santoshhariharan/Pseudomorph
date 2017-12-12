@@ -238,7 +238,8 @@ clear fNames filePrefix randPrc
 % %     gps(ii) = 0;    
 % end
 % disp('Done');
-%% Cluster data using Phenograph
+%% Pick samples from each control randomly
+
 getEqualSamples  = false;
 gps = getGroupIndices(allTxt,unique(allTxt));
 numRpt = 1;
@@ -307,3 +308,146 @@ save(['centroidPerControl_Feat' num2str(size(mCent,2)) 'F_' num2str(k) 'K.mat'],
 disp('Done');
 clear grpData indx uIndx ii data4Clustering nGps;
 return;
+%% Create RF classifier
+
+minSamples = 5000;
+grp = getGroupIndices(allTxt,unique(allTxt));
+C = equalTrainingSamplePartition(grp,minSamples);
+extra_options.replace = 0;
+model = classRF_train(allD(C.training,:),grp(C.training),...
+                100,floor(sqrt(numel(allD(1,:)))), extra_options);            
+%% Read unkown seqeunces
+pth = 'F:\Projects\Proteinlocalization\SequencePaperData';
+param.rootpath = pth;
+fNames = dir(pth);
+fprintf('Completed Reading................');
+mxRw = 4000;
+allClustering = zeros(mxRw,size(mCent,1));
+allClassification = zeros(mxRw,max(grp));
+allLbl = cell(mxRw,1);
+cnt = 1;
+for iFiles = 3:size(fNames,1)
+    fprintf('\b\b\b\b\b\b\b\b\b%8.3f%%',iFiles*100./size(fNames,1));    
+    if(fNames(iFiles).isdir)
+        continue;
+    end
+    tok = regexpi(fNames(iFiles).name,'.txt','match');
+    if(isempty(tok))
+        continue;
+    end
+    
+    tok = regexpi(fNames(iFiles).name,'control','match');
+    if(~isempty(tok))
+        continue;
+    else
+        D = readfiles(cellstr(fNames(iFiles).name),param);
+    end
+    %     Remove cells out of focus
+    focus = getFocusFilteredData(D.data,param);
+    D.data = D.data(focus,:);
+    D.textdata = D.textdata(focus,:);
+    
+    % Spotty Nuclei
+    ii = (D.data(:,strcmpi('Ch1_INT_Nucleus_intensity',param.datahdr))./...
+        D.data(:,strcmpi('Ch1_INT_Cytoplasm_intensity',param.datahdr)))>3.5;
+    jj = (D.data(:,strcmpi('Ch1_INT_Nucleus_intensity_stddev',param.datahdr))./...
+        D.data(:,strcmpi('Ch1_INT_Cytoplasm_intensity_stddev',param.datahdr)))>3.5;
+    ii = and(ii,jj);      
+    D.data = D.data(ii,:);
+    D.textdata = D.textdata(ii,:);
+    
+    % Low intensity
+    ii = D.data(:,intFeat)>100; 
+    D.data = D.data(ii,:);
+    D.textdata = D.textdata(ii,:);
+    
+    % Incorrect segmentation
+    allMorRatio = D.data(:,nucAreaFeat)./...
+                         (D.data(:,cellAreaFeat)+D.data(:,nucAreaFeat));    
+    ii = allMorRatio <= .5 & allMorRatio >= .2;
+    D.data = D.data(ii,:);
+    D.textdata = D.textdata(ii,:);
+    
+    % Select features
+    D.data = D.data(:,param.datafeat);
+    D.data = bsxfun(@minus,D.data,meanD);
+    D.data = bsxfun(@rdivide,D.data,stdD);
+    uText = unique(D.textdata(:,columnForControls));
+    lbl = knnclassify(D.data, mCent, 1:size(mCent,1));
+    lbl1 = classRF_predict(D.data,model);
+    for jText  = 1:numel(uText)
+        ii = strcmpi(uText{jText,:},D.textdata(:,columnForControls));
+        allClustering(cnt,:) = histcounts(lbl(ii),[.5:size(mCent,1)+.5]);
+        allClassification(cnt,:) = histcounts(lbl1(ii),[.5:max(grp)+.5]);
+        allLbl(cnt) = uText(jText,:);
+        cnt = cnt+1;
+    end
+    
+end
+%%
+
+ii = sum(allClustering,2) >0;
+allClustering = allClustering(ii,:);
+allLbl = allLbl(ii);
+allClassification = allClassification(ii,:);
+% remove sequences with less than 50 cells
+
+ii = sum(allClustering,2) >50;
+allClustering = allClustering(ii,:);
+allLbl = allLbl(ii);
+allClassification = allClassification(ii,:);
+%% Have only unknowns as clusters
+uText = unique(allLbl);
+tmpClassification = zeros(numel(uText),size(allClustering,2));
+for i = 1:numel(uText)
+    mt = regexpi(uText{i,:},'^(P\d+-*)');
+    if(~isempty(mt))
+        ii = strcmpi(uText{i,:},allLbl);
+        if(sum(ii)>0)
+          tmpClassification(i,:) = sum(allClustering(ii,:),1);  
+        end
+    end
+end
+ii = sum(tmpClassification,2) > 0;
+tmpClassification = tmpClassification(ii,:);
+uText = uText(ii,:);
+allClassification = allClassification(ii,:);
+%% Cluster seqeunces 
+seqDataforClustering = bsxfun(@rdivide,tmpClassification,sum(tmpClassification,2));
+clsLabels = phenograph(seqDataforClustering,30);
+
+%%                
+xLbl = knnclassify(allD, mCent, 1:size(mCent,1));
+%% Plot data
+
+redData = compute_mapping(mCent,'t-SNE',2);
+viewScatterPie2(redData,xLbl,allTxt,map,100);
+
+
+%%
+redData2 = compute_mapping(seqDataforClustering,'t-SNE',2);
+rSize = sum(tmpClassification,2);
+rSize =   (rSize - min(rSize))./(max(rSize) - min(rSize));
+rSize = 4*rSize +2;
+%%
+uClusterLabels = unique(clsLabels);
+[~,classLabels] = max(allClassification,[],2);
+cMap = jet(numel(uClusterLabels));
+figure;hold on
+for i = 1:numel(uClusterLabels)
+    ii = clsLabels == uClusterLabels(i);
+    plot(redData2(ii,1),redData2(ii,2),'o','MarkerFaceColor',cMap(i,:),...
+            'MarkerEdgeColor','none','MarkerSize',6);
+end 
+hold off;
+
+figure;hold on
+for i = 1:max(grp)
+    ii = classLabels == i;
+    plot(redData2(ii,1),redData2(ii,2),'o','MarkerFaceColor',map(i,:),...
+            'MarkerEdgeColor','none','MarkerSize',6);
+end 
+hold off;
+% lvl2 = knnclassify(allD, mCent2, 1:numel(uIndx2));
+
+

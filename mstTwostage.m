@@ -1,54 +1,103 @@
+
+%
 clear; clc;
 % Load the centroid file
-%%
-centroidFileName = 'centroidPerControl_FeatRed30F_40K.mat';
+centroidFileName = 'centroidPerControl_Feat49F_5K.mat';
 unKnowmRootDir = 'F:\Projects\Proteinlocalization\PseudoMorph\Unknowns';
 
 load(centroidFileName);
+
+% Cluster and compute centroids
 reclusterInitialCentroids = true;
 if(reclusterInitialCentroids)
     k = 5;
-    mCent2 = zeros(50,size(mCent,2));
-    mGrp2 = zeros(50,1);
-    mFrac2  = zeros(50,1);
-    cnt = 1;
-    clsCnt = 0;
-    mIndx = zeros(size(mCent,1),1);
-    for i = 1:max(mGrp)
-        ii = find(mGrp == i);
-        indx = phenograph(mCent(ii,:),k,'graphtype','Jaccard');
-        indx = indx + clsCnt;
-        clsCnt = clsCnt+max(indx)+1;
-        mIndx(ii,1) = indx;
-        uIndx = unique(indx);
-        for j = 1:numel(uIndx)
-            jj = find(indx == uIndx(j));
-            mCent2(cnt,:) = mean(mCent(ii(jj),:));
-            mGrp2(cnt,1) = i;
-            mFrac2(cnt,1) = numel(jj)/numel(indx);
-            cnt = cnt+1;
-        end
+    indx = phenograph(mCent,k,'graphtype','Jaccard');
+    uIndx = unique(indx);
+    mCent2 = zeros(numel(uIndx),size(mCent,2));
+    mFrac2 = zeros(numel(uIndx),1);
+    for j = 1:numel(uIndx)
+        jj = find(indx == uIndx(j));
+        mCent2(j,:) = mean(mCent(jj,:));
+        mFrac2(j,1) = numel(jj)/numel(indx);        
     end
-    cnt  =cnt-1;
-    if(cnt<50)
-        mCent2 = mCent2(1:cnt,:);
-        mGrp2 = mGrp2(1:cnt,1);
-        mFrac2 = mFrac2(1:cnt,1);
-    end
-else
-    mCent2 = mCent;
-    mGrp2 = mGrp;
-    mFrac2 = mFraction;
 end
-clc;
-
+%% Compute cluster Distribution matrix
+disMat = zeros(numel(uIndx),max(mGrp));
+radiusCls = zeros(numel(uIndx),1);
+for i = 1:numel(uIndx)
+    ii = indx==uIndx(i);
+    radiusCls(i) = sum(ii);
+    for j = 1:max(mGrp)
+        jj = mGrp==j;
+        kk = logical(ii.*jj);
+        disMat(i,j) = sum(mFraction(kk));
+    end
+end
+radiusCls = radiusCls./sum(radiusCls);
+% radius = (radius - min(radius))./(max(radius)-min(radius));
 %% Compute Ensemble MST
-mstCutoffValue= .5;
-aConnections = getWeightMatrixByMST(mCent2);
-% aConnections = tril(aConnections,-1);
+mstCutoffValue= .2;
+numK = ceil(.1*size(mCent,1));
+aConnections = getWeightMatrixByMST(mCent,numK,100);
+aConnections = tril(aConnections,-1);
 jj = aConnections<=mstCutoffValue;
 aConnections(jj) = 0;
-
+[r,c,v] = find(aConnections);
+% aConnectionsLogical = aConnections>0;
+%% Compute Merged MST profile
+% aConnectionCls = zeros(numel(uIndx),numel(uIndx));
+% for i = 1:numel(uIndx)
+%     ii = indx == uIndx(i);
+%     for j = 1:numel(uIndx)
+%         if(i==j) continue;end
+%         jj = indx == uIndx(j);
+%         kk = aConnections(ii,jj);
+%         aConnectionCls(i,j) = sum(kk(:))./(sum(ii).*sum(jj));
+% %         if(j==12)re;end
+%     end
+% end
+% % ii = aConnectionCls<.001;aConnectionCls(ii) = 0;
+% [r,c,v] = find(aConnectionCls);
+% % ii  = aConnectionCls(r,c);
+% ii = quantile(v,.5);
+% ii = v>ii;
+% v = v(ii);r = r(ii);c = c(ii);
+%% Compute dimension reduction
+redData = compute_mapping(mCent,'t-SNE',2);
+%% Define Map
+load('maps.mat');
+minSize = 20;
+maxSize = 70;
+mFraction2 = 50*mFraction+20;
+%% Plot data
+figure; hold on;
+for i = 1:max(mGrp)
+    ii = mGrp == i;
+    scatter(redData(ii,1),redData(ii,2),mFraction2(ii,1),...
+        maps(i,:),'filled'); 
+end
+hold off;  
+%% Cluster Map
+clsColor = colorcube(numel(uIndx));
+figure; hold on;
+for i = 1:numel(uIndx)
+    ii = indx == uIndx(i);
+    scatter(redData(ii,1),redData(ii,2),mFraction2(ii,1),...
+        clsColor(i,:),'filled'); 
+end
+hold off;
+%% Get Mean in reduced dimensions
+mCent3 = zeros(numel(uIndx),size(redData,2));
+for j = 1:numel(uIndx)
+    jj = find(indx == uIndx(j));
+    mCent3(j,:) = mean(redData(jj,:));
+%     mFrac2(j,1) = numel(jj)/numel(indx);
+end
+%% View data
+edgeWidth = (v - min(v))./(max(v)-min(v));
+edgeWidth = 2*edgeWidth+.5;
+viewMSTPie2(mCent3,disMat,maps,[r c],edgeWidth,.05,radiusCls);
+return;
 %% Load unknowns with filters
 
 fprintf('Starting pseudomorph\n');
@@ -275,3 +324,5 @@ for i = 1:max(mGrpTmp)
         map(i,:),'filled'); 
 end
 hold off;axis off;
+
+

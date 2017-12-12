@@ -29,7 +29,7 @@ filePrefix = '.txt';
 fNames = dir(pth);
 columnForControls = 9;
 columnForOrganelle = 10;
-featureReduction = true;
+featureReduction = false;
 % clustersPerLandmark = true;
 
 maxMinTType = false;
@@ -231,7 +231,7 @@ ii = sum(isnan(mCent),2)==0;
 mCent = mCent(ii,:);
 % mGrp  = mGrp(ii,:);
 % mSet = mSet(ii,:);
-save('centroidPerControl_RedFeature_30K.mat','mCent','meanD','stdD','corrFeat');
+save('centroidPerControl_NoFeatureRed_30K.mat','mCent','meanD','stdD','corrFeat');
 disp('Done');
 clear grpData indx uIndx ii data4Clustering nGps;
 return;
