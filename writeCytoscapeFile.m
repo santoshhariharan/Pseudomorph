@@ -1,5 +1,11 @@
-function [ output_args ] = writeCytoscapeNetworkFile(netData,nodeData,filename )
+function [ output_args ] = writeCytoscapeFile(fileprefix,directory,adjacencyMatrix,...
+                                                edgeWeights,edgeAttribute,...
+                                                clusterIndex,treatmentIndex )
 %writeCytoscapeFile Write cytoscape files
+
+
+
+networkFilename
 
 
 m = size(nodeData,1);

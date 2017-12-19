@@ -31,8 +31,8 @@ end
 
 % Estimate radius for each cluster
 axisRange = abs(max(x)-min(x));
-maxRadius = .03*min(axisRange);
-minRadius = .03*min(axisRange);
+maxRadius = .04*min(axisRange);
+minRadius = .01*min(axisRange);
 rsize = sum(disMat,2);
 rsize = (rsize - min(rsize))./(max(rsize)- min(rsize));
 rsize = (maxRadius - minRadius)*rsize + minRadius;
@@ -42,9 +42,13 @@ adjacencyMatrix = tril(adjacencyMatrix);
 [r,c] = find(adjacencyMatrix);
 lv = find(adjacencyMatrix);
 [v] = edgeWidth(lv);
+if(numel(v)>1)
 edgeWidthVal = (v - min(v))./(max(v)-min(v));
 v = edgeWidthVal;
 edgeWidthVal = 1*edgeWidthVal+.1;
+else
+    edgeWidthVal = 1;
+end
 xst = [r c];
 
 
@@ -59,13 +63,13 @@ numSteps = 30;
 % rsize = 5;
 % hold on;
 h=figure;hold all;
-
+% 1-(v(i)*
 % Plot points
 points2Plot = unique([r;c]);
 
 for i = 1:size(xst,1)
     coord = x(xst(i,:),:)';    
-    line(coord(1,:),coord(2,:),'Linewidth',edgeWidthVal(i),'Color',1-(v(i)*[.7 .7 .7]));    
+    line(coord(1,:),coord(2,:),'Linewidth',edgeWidthVal(i),'Color',[.7 .7 .7]);    
 end
 % for i = 1:points2Plot
 %     cl = map(treatmentIndex(points2Plot(i)),:);
@@ -94,8 +98,11 @@ for iClusters = 1:size(disMat,1)
     end    
 %     legend(uYhat)
 end
+
+%     scatter(x(points2Plot,1),x(points2Plot,2),45,...
+%         map(treatmentIndex(points2Plot),:),'filled','MarkerEdgeColor',[0 0 0]);
 hold off;axis tight
-legend(hall,treatmentNames);
+% legend(hall,treatmentNames);
 % clear hall
 axis off;
 end

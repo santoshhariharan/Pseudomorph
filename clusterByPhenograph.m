@@ -10,9 +10,13 @@ uniqueIndex= zeros(numel(uIndx),1);
 clusterIndex = zeros(numel(indx),1);
 for j = 1:numel(uIndx)
     jj = find(indx == uIndx(j));
-    idx = knnsearch(x(jj,:),mean(x(jj,:)),'K',1);
-    idx = idx(end);
-    idx = jj(idx);
+    if(numel(jj)>1)
+        idx = knnsearch(x(jj,:),mean(x(jj,:)),'K',1);
+        idx = idx(end);
+        idx = jj(idx);
+    else
+        idx = jj;
+    end
     clusterCentroid(j,:) = x(idx,:);
     uniqueIndex(j,1) = idx;
     centroidFraction(j,1) = numel(jj)/numel(indx);
