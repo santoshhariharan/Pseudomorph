@@ -3,9 +3,8 @@ clear; clc;close all;
 %% Load centroid files 
 % Load the centroid file
 centroidFileNames = {
-%         'F:\Projects\Proteinlocalization\PseudoMorph\Bin2Data\Mito-ER\MITO-MET-PSS1-ER_centroidPerControl_Feat160F_5K.mat'
-%         'Sec_centroidPerControl_Feat160F_5K_NoOttawa.mat'
-        'F:\Projects\Proteinlocalization\PseudoMorph\Bin2Data\SecPathway\OnlySecPway_centroidPerControl_Feat160F_5K.mat'
+        'F:\Projects\Proteinlocalization\PseudoMorph\Bin2Data\Mito-ER\MITO-MET-PSS1-ER_centroidPerControl_Feat160F_5K.mat'
+%         'F:\Projects\Proteinlocalization\PseudoMorph\Bin2Data\SecPathway\OnlySecPway_centroidPerControl_Feat160F_5K.mat'
 %     'F:\Projects\Proteinlocalization\PseudoMorph\Bin2Data\ER\ER_centroidPerControl_Feat160F_5K.mat';
 %      'F:\Projects\Proteinlocalization\PseudoMorph\Bin2Data\ERGIC\ERGiC_centroidPerControl_Feat160F_5K.mat';
 %      'F:\Projects\Proteinlocalization\PseudoMorph\Bin2Data\Golgi\Golgi_centroidPerControl_Feat160F_5K.mat';               
@@ -41,7 +40,7 @@ clear allCent allTxt allFrac
 
 controlNames = unique(mText(:,9));
 mGrp = getGroupIndices(mText(:,9),controlNames);
-load('maps.mat');
+load('mitoMetaxinMaps.mat');
 % load(centroidFileName);
 %% Remove controls
 grpNumber = [];
@@ -80,22 +79,33 @@ clusterCutoffNumPoints = clusterCutoffNumPoints*size(mCent,1);
 reclusterInitialCentroids = true;
 
 if(reclusterInitialCentroids)
-    k = 5;
-    [clusterIndex,mCent2,mFrac2,uIndx] = clusterByPhenograph( mCent,k );
+    k = 5;k = max(mGrp)*3;
+%     [clusterIndex,mCent2,mFrac2,uIndx] = clusterByPhenograph( mCent,k );
+    C = clsIn(mCent);
+%     step = (C.pmax - C.pmin)/100;
+%     pref = [C.pmin:step:C.pmax];
+%     numCls = nan(numel(pref),1);
+%     for i = 1:numel(pref)
+%         numCls(i) = numel(unique(apcluster(C.S,pref(i),'dampfact',.9)));
+%     end
+%     figure;plot(pref,numCls,'-b');
+      clusterIndex = apclusterK(C.S,k);
 end
-keepPoints = true(numel(clusterIndex),1);
-for i = 1:numel(uIndx)
-    ii = clusterIndex == uIndx(i);
-    if(sum(ii)<clusterCutoffNumPoints)
-        keepPoints(ii) = false;
-    end
-    
-end
-mCent = mCent(keepPoints,:);
-mGrp  = mGrp(keepPoints,:);
-mText = mText(keepPoints,:);
-mFraction = mFraction(keepPoints,:);
-clusterIndex = clusterIndex(keepPoints,:);
+disp('Completed Clustering');
+% uIndx = unique(clusterIndex);
+% keepPoints = true(numel(clusterIndex),1);
+% for i = 1:numel(uIndx)
+%     ii = clusterIndex == uIndx(i);
+%     if(sum(ii)<clusterCutoffNumPoints)
+%         keepPoints(ii) = false;
+%     end
+%     
+% end
+% mCent = mCent(keepPoints,:);
+% mGrp  = mGrp(keepPoints,:);
+% mText = mText(keepPoints,:);
+% mFraction = mFraction(keepPoints,:);
+% clusterIndex = clusterIndex(keepPoints,:);
 uIndx = unique(clusterIndex);
 %% Compute dimension reduction
 redData = compute_mapping(mCent,'t-SNE',2);
@@ -153,18 +163,18 @@ c = col(ii);
 v = weight(ii);
 % Get Edges
 edgeWidth = (v - min(v))./(max(v)-min(v));
-edgeWidth = 1*edgeWidth+.05;
+% edgeWidth = edgeWidth+.1;
 edgeWidthMatrix = zeros(size(mCent,1));
 for i = 1:numel(r)
-    edgeWidthMatrix(r(i),c(i)) = v(i);
-    edgeWidthMatrix(c(i),r(i)) = v(i);
+    edgeWidthMatrix(r(i),c(i)) = edgeWidth(i);
+    edgeWidthMatrix(c(i),r(i)) = edgeWidth(i);
 end
 % viewMSTPie2(redData(uIndx,:),disMat,maps,[r c],edgeWidth,.05,radiusCls);
 %% Plot MST Data
 figure; hold on;
 for i = 1:numel(r)
     coord = redData([r(i);c(i)],:)';
-    line(coord(1,:),coord(2,:),'Linewidth',edgeWidth(i),'Color',1-(v(i)*[1 1 1]));
+    line(coord(1,:),coord(2,:),'Linewidth',1.5*edgeWidth(i)+.3,'Color',[.7 .7 .7]);
 end
 
 for i = 1:max(mGrp)
@@ -216,15 +226,19 @@ viewMSTPie2(redData,clusterIndex,mGrp,...
                                     maps,adjacencyMatrixShort,edgeWidthMatrix,...
                                     controlNames)
 %% Write Cytoscape file       
-
-writeCytoscapeFile(fileprefix,adjacencyMatrix,edgeWeights,edgeAttribute,...
-    clusterIndex,mGrp)
+% fileprefix = 'Test';
+% 
+% % edgeWeights = zeros(size(mCent,1));
+% edgeWeights = pdist2(mCent,mCent);
+% 
+% writeCytoscapeFile(fileprefix,pwd,adjacencyMatrixShort,edgeWeights,edgeWidthMatrix,...
+%     clusterIndex,mGrp)
 %% Retain Clusters between Groups & Plot Connections
 % grp2Retain = [4 5 6 7 8 9 10 11 13];
 % grp2Retain = [1 2 3 6 7 12 13];
 clc;
-numNeighbors = 5;
-grp2Retain = [8];
+numNeighbors = 7;
+grp2Retain = [3  5];
 % Find clusters where the group has atleast 10% of cells
 dMat = bsxfun(@rdivide,disMat,sum(disMat,1));
 dMat = dMat>.1;

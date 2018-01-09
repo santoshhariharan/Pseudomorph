@@ -32,7 +32,7 @@ end
 % Estimate radius for each cluster
 axisRange = abs(max(x)-min(x));
 maxRadius = .04*min(axisRange);
-minRadius = .01*min(axisRange);
+minRadius = .02*min(axisRange);
 rsize = sum(disMat,2);
 rsize = (rsize - min(rsize))./(max(rsize)- min(rsize));
 rsize = (maxRadius - minRadius)*rsize + minRadius;
@@ -43,9 +43,9 @@ adjacencyMatrix = tril(adjacencyMatrix);
 lv = find(adjacencyMatrix);
 [v] = edgeWidth(lv);
 if(numel(v)>1)
-edgeWidthVal = (v - min(v))./(max(v)-min(v));
-v = edgeWidthVal;
-edgeWidthVal = 1*edgeWidthVal+.1;
+% edgeWidthVal = (v - min(v))./(max(v)-min(v));
+% v = edgeWidthVal;
+edgeWidthVal = v;
 else
     edgeWidthVal = 1;
 end
@@ -66,14 +66,15 @@ h=figure;hold all;
 % 1-(v(i)*
 % Plot points
 points2Plot = unique([r;c]);
+x = getNonOverlapCoordinates( x, x(uniqueClusterIndex,:), rsize );
 
 for i = 1:size(xst,1)
     coord = x(xst(i,:),:)';    
-    line(coord(1,:),coord(2,:),'Linewidth',edgeWidthVal(i),'Color',[.7 .7 .7]);    
+    line(coord(1,:),coord(2,:),'Linewidth',1.5*edgeWidthVal(i)+.1,'Color',[.7 .7 .7]);    
 end
 % for i = 1:points2Plot
 %     cl = map(treatmentIndex(points2Plot(i)),:);
-    scatter(x(points2Plot,1),x(points2Plot,2),45,...
+    scatter(x(points2Plot,1),x(points2Plot,2),30,...
         map(treatmentIndex(points2Plot),:),'filled'); 
 % end
 
@@ -101,7 +102,7 @@ end
 
 %     scatter(x(points2Plot,1),x(points2Plot,2),45,...
 %         map(treatmentIndex(points2Plot),:),'filled','MarkerEdgeColor',[0 0 0]);
-hold off;axis tight
+hold off;axis equal
 % legend(hall,treatmentNames);
 % clear hall
 axis off;
